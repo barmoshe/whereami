@@ -1,30 +1,41 @@
-# The permission wall, made visible.
+# Creating a NEW GitHub repo: the capability that taught us the most.
 #
-# Reaching GitHub is not the same as being ALLOWED to act on it. In a Claude Code
-# cloud session the built-in GitHub tools authenticate as the Claude GitHub App,
-# and a GitHub App installation token CANNOT create a user-owned repository:
-# POST /user/repos accepts only a user OAuth token or a PAT. It returns
-# 403 "Resource not accessible by integration" on a full, healthy network.
+# It fails in a Claude Code cloud session for TWO independent reasons, and fixing
+# either one alone changes nothing. This descriptor exists to stop an agent
+# rediscovering that by hitting a 403.
 #
-# So we probe for the CREDENTIAL TYPE, not for reachability. A GH_TOKEN in the
-# environment is a user token, and it is what turns repo creation from impossible
-# into routine. This is the one descriptor whose probe answers "am I allowed",
-# and it is the seed of the Remediate layer.
+#   1. CREDENTIAL TYPE. The built-in GitHub tools authenticate as the Claude
+#      GitHub App, and a GitHub App installation token cannot create a user-owned
+#      repo: POST /user/repos takes a user OAuth token or a PAT. -> 403
+#      "Resource not accessible by integration".
+#
+#   2. EGRESS POLICY (the wall behind the wall). Even holding a valid user PAT,
+#      the cloud session's agent proxy re-terminates TLS and filters GitHub API
+#      *paths*, allowing only endpoints scoped to the session's configured repo.
+#      POST /user/repos is not repo-scoped, so the proxy refuses it before it ever
+#      reaches GitHub: "sessions are bound to their configured repositories."
+#
+# So "reachable" is true (api.github.com answers 200), the credential is right,
+# and the call still cannot be made. Host-level reachability does not imply
+# path-level reachability. Hence the Unless veto: in a cloud session this is
+# unavailable no matter what token is present. Verified empirically, 2026-07-14.
 
 Capability github.repo-create
-  Description Create a NEW GitHub repository (needs a user-type credential, not an App token)
+  Description Create a NEW GitHub repository (needs a user credential AND an unfiltered egress path)
   Probe env GH_TOKEN
   Probe env GITHUB_TOKEN
   Probe file ~/.config/gh/hosts.yml
-  Requires A user credential (PAT or user OAuth). A GitHub App installation token is NOT sufficient for user-owned repos, at any network level.
-  Remediation Set GH_TOKEN to a GitHub PAT. Fine-grained: Administration read/write (repo creation), short expiry. Classic: repo scope (or public_repo for public only). In Claude Code cloud, add it under environment settings; note there is no secrets store yet, so it is visible to anyone who can edit that environment. Prefer a short expiry and rotate. Without it, create the repo from a local session, or under an org (POST /orgs/{org}/repos works for an App with Administration permission).
+  Unless env CLAUDE_CODE_REMOTE
+  Blocked Cloud session: the agent proxy filters GitHub API paths to this session's bound repo, so POST /user/repos is refused even with a valid PAT. A token does NOT fix this. Create the repo from a local session, or under an org, or make it in the GitHub UI and push into it from here (writes to an EXISTING repo are allowed).
+  Requires A user credential (PAT or user OAuth; an App installation token is never enough for user-owned repos) AND an environment whose egress is not path-filtered.
+  Remediation Create it from a LOCAL session (simplest, and what works today). Or create an org repo: POST /orgs/{org}/repos does work for the Claude GitHub App with Administration permission. Or create the empty repo in the github.com UI, then push into it from anywhere, since existing-repo writes pass the proxy. Adding a PAT as GH_TOKEN in cloud environment settings is NOT sufficient on its own and was verified to still 403 at the proxy.
   Risk high
   Environments local
 
-Capability github.api-write-as-app
-  Description Act on EXISTING repos via the built-in GitHub tools (issues, PRs, comments, pushes)
+Capability github.repo-write
+  Description Read and write EXISTING repos (issues, PRs, comments, pushes) via the built-in GitHub tools
   Probe http https://api.github.com
   Requires The Claude GitHub App connection, or a gh token synced with /web-setup
-  Remediation Reachable on the default Trusted network level (GitHub is allowlisted). This covers reading and writing EXISTING repos. It does not cover creating new user-owned ones, which is a different credential class entirely.
+  Remediation Works on the default Trusted network level, and repo-scoped API paths pass the cloud agent proxy. This is a different credential and policy class from creating a new repo: acting on the repo you are bound to is fine, minting a new one is not.
   Risk low
   Environments local cloud ci

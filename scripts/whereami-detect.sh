@@ -19,7 +19,7 @@
 set +e
 trap 'exit 0' INT TERM
 
-VERSION="0.3.0"
+VERSION="0.4.0"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
@@ -206,16 +206,27 @@ run_probe() {
   [ "$_args" = "$1" ] && _args=""
   case "$_prim" in
     env)
+      # NEVER emit the value. An env var is where credentials live (GH_TOKEN,
+      # API keys), and this detail string is printed by --json and written to
+      # state.json. Report presence only. Learned the hard way: an earlier build
+      # printed a live PAT straight into a session transcript.
       _name=${_args%%=*}
       if [ "$_name" = "$_args" ]; then
         eval "_v=\${$_name:-}"
-        if [ -n "$_v" ]; then PROBE_STATUS="available"; PROBE_DETAIL="$_name=$_v"
+        if [ -n "$_v" ]; then PROBE_STATUS="available"; PROBE_DETAIL="$_name is set (value not shown)"
         else PROBE_STATUS="unavailable"; PROBE_DETAIL="$_name unset"; fi
       else
+        # Matching an expected value: the expectation is declared in the
+        # descriptor (public), so echoing it back leaks nothing new. Still never
+        # echo the actual value on mismatch.
         _want=${_args#*=}
         eval "_v=\${$_name:-}"
-        if [ "$_v" = "$_want" ]; then PROBE_STATUS="available"; PROBE_DETAIL="$_name=$_v"
-        else PROBE_STATUS="unavailable"; PROBE_DETAIL="$_name=${_v:-unset}"; fi
+        if [ "$_v" = "$_want" ]; then PROBE_STATUS="available"; PROBE_DETAIL="$_name=$_want"
+        else
+          PROBE_STATUS="unavailable"
+          if [ -n "$_v" ]; then PROBE_DETAIL="$_name is set but does not equal $_want"
+          else PROBE_DETAIL="$_name unset"; fi
+        fi
       fi ;;
     cmd)
       for _b in $_args; do
@@ -295,7 +306,7 @@ parse_cap_file() {
       Capability)
         _id=$(printf '%s' "$_val" | tr -cd 'A-Za-z0-9._-')
         [ -n "$_id" ] && : > "$WORK/caps/$_id" ;;
-      Description|Probe|Requires|Remediation|Risk|Environments)
+      Description|Probe|Unless|Blocked|Requires|Remediation|Risk|Environments)
         [ -n "$_id" ] && printf '%s\t%s\n' "$_key" "$_val" >> "$WORK/caps/$_id" ;;
     esac
   done < "$1"
@@ -323,7 +334,7 @@ AVAILABLE_IDS=""; UNAVAILABLE_IDS=""; UNKNOWN_IDS=""
 for _capfile in "$WORK/caps"/*; do
   [ -f "$_capfile" ] || continue
   _cid=$(basename "$_capfile")
-  _desc=""; _req=""; _rem=""; _risk=""; _envs=""
+  _desc=""; _req=""; _rem=""; _risk=""; _envs=""; _blocked=""
   _status="unknown"; _detail="no probe defined"
   _had_probe=0
   while IFS='	' read -r _k _v; do
@@ -333,6 +344,7 @@ for _capfile in "$WORK/caps"/*; do
       Remediation) _rem="$_v" ;;
       Risk) _risk="$_v" ;;
       Environments) _envs="$_v" ;;
+      Blocked) _blocked="$_v" ;;
     esac
   done < "$_capfile"
   # probes: any pass wins; first definitive failure detail kept otherwise
@@ -353,6 +365,23 @@ for _capfile in "$WORK/caps"/*; do
   done < "$_capfile"
   [ "$_status" = "available" ] || _detail="$_fail_detail"
   [ "$_had_probe" -eq 0 ] && _status="unknown"
+
+  # Unless = a POLICY VETO. If any Unless probe matches, the capability is
+  # unavailable no matter what the Probe lines found.
+  # This exists because "I hold the right credential" is not the same as "the
+  # environment will let me use it". A Claude Code cloud session can hold a valid
+  # user PAT and still be refused: its egress proxy filters GitHub API *paths* to
+  # the session's bound repo, so POST /user/repos is denied at the proxy, never
+  # reaching GitHub. Probing the credential alone reports a confident, wrong yes.
+  while IFS='	' read -r _k _v; do
+    [ "$_k" = "Unless" ] || continue
+    run_probe "$_v"
+    if [ "$PROBE_STATUS" = "available" ]; then
+      _status="unavailable"
+      _detail="${_blocked:-blocked by environment policy ($_v)}"
+      break
+    fi
+  done < "$_capfile"
 
   _entry=$(printf '{"id":"%s","status":"%s","detail":"%s"' "$(je "$_cid")" "$_status" "$(je "$_detail")")
   [ -n "$_desc" ] && _entry="$_entry,\"description\":\"$(je "$_desc")\""
