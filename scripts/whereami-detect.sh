@@ -19,7 +19,7 @@
 set +e
 trap 'exit 0' INT TERM
 
-VERSION="0.1.0"
+VERSION="0.2.0"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
@@ -255,10 +255,20 @@ run_probe() {
         PROBE_STATUS="unavailable"
       fi ;;
     mcp)
+      # Two-tier, and deliberately never "unavailable".
+      # A server can reach this session two ways: a config file (visible to us) or
+      # harness/connector injection (NOT visible to a subprocess at all: connectors
+      # are configured per session on the Anthropic side and their traffic routes
+      # through Anthropic's servers, never through a file on disk).
+      # So "absent from config" does NOT mean "absent from the session". Claiming
+      # "unavailable" is a false negative, and it fired for real: a cloud session
+      # reported mcp.github and mcp.vercel unavailable while both were live.
+      # Report "unknown" and let the skill confirm with a read-only call.
       if printf '%s\n' "$MCP_CONFIGURED" | grep -qx "$_args" 2>/dev/null; then
         PROBE_STATUS="available"; PROBE_DETAIL="configured (auth NOT verified; use the whereami skill to verify)"
       else
-        PROBE_STATUS="unavailable"; PROBE_DETAIL="not found in .mcp.json or ~/.claude.json"
+        PROBE_STATUS="unknown"
+        PROBE_DETAIL="not in .mcp.json or ~/.claude.json; a harness/connector-injected server is invisible to this subprocess, so this is NOT a no. Use the whereami skill to confirm with a read-only call."
       fi ;;
     disk)
       if [ "$DISK_MB" = "unknown" ]; then PROBE_STATUS="unknown"; PROBE_DETAIL="df unavailable"
@@ -440,17 +450,18 @@ printf '%s\n' "$STATE_JSON" > "$STATE_FILE" 2>/dev/null
 render_brief() {
   printf '[whereami] runtime=%s os=%s network=%s sandboxed=%s\n' "$RUNTIME" "$OS" "$NETWORK" "$SANDBOXED"
   if [ -n "$MCP_CONFIGURED" ]; then
-    printf 'MCP servers configured (auth unverified; MCP routes via Anthropic and bypasses any VM network allowlist): %s\n' \
+    printf 'MCP servers in config (auth unverified; MCP routes via Anthropic and bypasses any VM network allowlist): %s\n' \
       "$(printf '%s' "$MCP_CONFIGURED" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
   else
-    printf 'MCP servers configured: none found\n'
+    printf 'MCP servers in config: none. This is NOT "no MCP": connector/harness-injected servers are invisible to this probe. Check your actual tool list before concluding a server is missing.\n'
   fi
   [ -n "$AVAILABLE_IDS" ] && printf 'Available:%s\n' "$AVAILABLE_IDS"
   [ -n "$UNAVAILABLE_IDS" ] && printf 'Unavailable:%s\n' "$UNAVAILABLE_IDS"
   [ -n "$UNKNOWN_IDS" ] && printf 'Unknown:%s\n' "$UNKNOWN_IDS"
   if [ "$NETWORK" = "allowlist" ] || [ "$NETWORK" = "none" ]; then
-    printf 'Note: restricted network. A transport-level block (no origin response) is a proxy/allowlist 403 and CAN be fixed by raising the network level; an origin HTTP 403 is target-side and CANNOT. When blocked, emit a handoff brief instead of half-building.\n'
+    printf 'Note: restricted network. A transport-level block (no origin response) is a proxy/allowlist block and CAN be fixed by raising the network level; an origin HTTP 403 is target-side and CANNOT. When blocked, emit a handoff brief instead of half-building.\n'
   fi
+  printf 'Reachable is not authorized: these probes prove reachability only. A call can still 403 because the credential TYPE lacks the right (a GitHub App token cannot create a personal repo). Read a capability remediation before assuming it is missing.\n'
   printf 'State: %s (re-check: run the whereami skill)\n' "$STATE_FILE"
   if [ "$OPINIONS" = "true" ] && [ -n "$TIPS_JSON" ]; then
     printf 'Guidance is ON; see "guidance" in state.json.\n'

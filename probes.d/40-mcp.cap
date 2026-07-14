@@ -1,22 +1,32 @@
 # MCP servers are the keystone signal: their traffic routes through Anthropic's
 # servers, so they bypass any VM network allowlist. A session that cannot fetch
 # a live website may still create repos and deploy through MCP.
-# The detector reports CONFIGURED only (parsed from .mcp.json / ~/.claude.json).
-# It never claims authentication; the whereami skill verifies auth on demand
-# with read-only calls and updates state.json.
+#
+# TWO WAYS IN, ONLY ONE IS VISIBLE:
+#   1. config files (.mcp.json, ~/.claude.json)  -> this probe can see them
+#   2. harness/connector injection (per-session,  -> INVISIBLE to a subprocess
+#      configured on the Anthropic side)
+# So the mcp primitive never reports "unavailable", only "available" or
+# "unknown". Absent from config is not absent from the session. Verified the
+# hard way: a cloud session reported both servers below as unavailable while
+# both were live and authenticated.
+#
+# The detector reports CONFIGURED at most. It never claims authentication, and
+# authentication never implies authorization (see mcp.github's remediation).
+# The whereami skill confirms both with read-only calls.
 
 Capability mcp.github
-  Description GitHub MCP server configured (create repos, PRs, API without direct network)
+  Description GitHub MCP server (repos, PRs, API without direct network)
   Probe mcp github
-  Requires OAuth session on the Anthropic side
-  Remediation Add the GitHub MCP server (claude mcp add, or a connector on claude.ai) and authenticate it once from an interactive session.
+  Requires An authenticated GitHub session on the Anthropic side
+  Remediation Add the GitHub MCP server or enable the connector, then authenticate once from an interactive session. NOTE, authenticated does not mean authorized: in Claude Code cloud the GitHub MCP authenticates as the Claude GitHub App, and a GitHub App installation token CANNOT create a personal repository (POST /user/repos accepts only a user OAuth token or a classic PAT with repo scope), so repo creation returns 403 "Resource not accessible by integration" on a perfectly good network. Create personal repos from a local session, or create them under an org (POST /orgs/{org}/repos works for an App with Administration permission).
   Risk low
   Environments local cloud
 
 Capability mcp.vercel
-  Description Vercel MCP server configured (deploys without direct network)
+  Description Vercel MCP server (deploys without direct network)
   Probe mcp vercel
-  Requires OAuth session on the Anthropic side
-  Remediation Add the Vercel MCP server / connector and authenticate it once from an interactive session.
+  Requires An authenticated Vercel session on the Anthropic side
+  Remediation Add the Vercel MCP server or enable the connector and authenticate it once from an interactive session. Its deploy tool ships a file tree directly, so it needs no git import and no repo; a first deploy to a brand-new project becomes that project's production alias even when a preview target is requested.
   Risk low
   Environments local cloud

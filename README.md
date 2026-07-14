@@ -51,14 +51,38 @@ Identity picks the lane, probes confirm ("detect, don't sniff"):
 - **Network**: two capped probes (2-3s) classify the lane: an allowlisted canary
   (`api.github.com`) proves any egress; a neutral host (`example.com`) separates
   `full` from `allowlist`; both silent means `none`.
-- **The two 403s** (do not conflate): a transport-level block with no origin
-  response is a proxy/allowlist 403, and raising the session network level can
-  fix it. An origin HTTP 403 with the site's own headers is target-side
-  (anti-bot or auth), and raising the network level will not fix it.
 - **MCP servers**: parsed from `.mcp.json` and `~/.claude.json` as *configured*.
   MCP traffic routes through Anthropic's servers, so it bypasses any VM network
   allowlist: a session that cannot fetch a website may still create repos and
-  deploy. Auth is verified only by the skill, via read-only calls.
+  deploy. An `mcp.*` capability is never reported as *unavailable*, only
+  *available* or *unknown*, because servers injected by the harness or by a
+  claude.ai connector live on the Anthropic side and are **invisible to a
+  subprocess**. Absent from config is not absent from the session. The skill
+  verifies auth with read-only calls.
+
+## Three walls, not one
+
+Most "why did that fail" confusion comes from conflating three different walls.
+Only the first is fixed by changing the network:
+
+| Wall | What you see | Fix |
+| :-- | :-- | :-- |
+| **Proxy / allowlist** | transport error, no origin response at all | raise the session network level |
+| **Target-side** | origin HTTP 403 carrying the site's own headers | real browser, operator upload, authenticated route. Network level will **not** help |
+| **Permission** | reachable, authenticated, still refused | change the *credential type*. Network level will **not** help |
+
+The permission wall is the one that hides. Authentication is not authorization.
+The canonical case: in a cloud session the GitHub MCP authenticates as the
+Claude GitHub App, and a GitHub App installation token **cannot create a
+personal repository** (`POST /user/repos` accepts only a user OAuth token or a
+classic PAT with `repo` scope). So it returns 403 "Resource not accessible by
+integration" on a perfectly good network, and no probe can predict it. Create
+personal repos from a local session, or create them under an org (an App with
+Administration permission can use `POST /orgs/{org}/repos`).
+
+A probe result proves **reachability**. It never proves **authorization**. That
+is why every descriptor carries a `remediation` line: read it before assuming a
+capability is simply missing.
 - **Everything else is a Capability Descriptor** (see below). Tools, browser,
   disk are just bundled descriptors, not special cases.
 
