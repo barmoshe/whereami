@@ -1,0 +1,10 @@
+# A launchable browser is the difference between "read the live site" and
+# "guess from cached knowledge". Any passing probe marks it available.
+
+Capability browser.headless-chrome
+  Description Headless Chromium/Chrome for screenshots and live-site reads
+  Probe cmd chromium chromium-browser google-chrome google-chrome-stable chrome
+  Probe file /Applications/Google*Chrome.app /Applications/Chromium.app
+  Remediation Install Chrome/Chromium, or use an operator-uploaded screenshot; sites behind anti-bot may need a real browser session either way.
+  Risk low
+  Environments local

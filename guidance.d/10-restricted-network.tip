@@ -1,0 +1,9 @@
+# Fires only when guidance is enabled ("opinions": true in whereami.config.json).
+
+Tip restricted-network-lanes
+  When network=allowlist
+  Say The network is allowlist-only. MCP servers still work (they route through Anthropic and bypass the VM allowlist), so repo creation and deploys may already be possible. For arbitrary live sites: raise the session network level, ask the operator to upload the content, or hand off to a local session.
+
+Tip no-network
+  When network=none
+  Say No outbound network detected. Work from local files and MCP servers only; queue anything needing the web into a handoff brief for a capable session.

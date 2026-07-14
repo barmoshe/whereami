@@ -1,0 +1,6 @@
+{
+  "opinions": false,
+  "canary_allowlisted": "https://api.github.com",
+  "canary_neutral": "https://example.com",
+  "extra_tools": ["terraform", "kubectl"]
+}

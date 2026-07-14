@@ -1,0 +1,17 @@
+# Workspace shape: single-repo cloud checkouts cannot see sibling repos, and
+# ephemeral VMs should not accumulate large intermediates.
+
+Capability fs.disk-headroom
+  Description At least 1GB of free disk at the project directory
+  Probe disk 1024
+  Remediation Clean build artifacts or delegate disk-heavy work (media renders, large clones) to a roomier environment.
+  Risk low
+  Environments local cloud ci
+
+Capability env.claude-code
+  Description Running inside a Claude Code session (entrypoint signal present)
+  Probe env CLAUDECODE
+  Probe env CLAUDE_CODE_ENTRYPOINT
+  Remediation Informational only.
+  Risk low
+  Environments local cloud ci

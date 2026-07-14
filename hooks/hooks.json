@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/whereami-detect.sh --brief",
+            "timeout": 6,
+            "statusMessage": "whereami: sensing the environment"
+          }
+        ]
+      }
+    ]
+  }
+}

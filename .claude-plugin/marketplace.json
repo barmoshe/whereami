@@ -1,0 +1,12 @@
+{
+  "name": "whereami",
+  "description": "Single-plugin marketplace for the whereami plugin.",
+  "owner": { "name": "Bar Moshe" },
+  "plugins": [
+    {
+      "name": "whereami",
+      "description": "Environment-aware Claude Code sessions: sense where the session runs and what it can reach, brief Claude at SessionStart, save the facts as JSON. Declarative capability descriptors, no hardcoded services.",
+      "source": "./"
+    }
+  ]
+}

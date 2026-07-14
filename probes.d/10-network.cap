@@ -1,0 +1,18 @@
+# Network reachability beyond the engine's built-in lane detection.
+# The engine already computes facts.network.lane from two canaries; these
+# descriptors express the capabilities agents actually branch on.
+
+Capability net.live-fetch
+  Description Fetch arbitrary live external websites (docs, brand sites, APIs not on an allowlist)
+  Probe http https://example.com
+  Requires network=full
+  Remediation Raise the session network level to Full or Custom, ask the operator to upload the page content, or hand off to a local session.
+  Risk medium
+  Environments local
+
+Capability net.github-api
+  Description Reach the GitHub REST API directly (allowlisted in Claude Code cloud by default)
+  Probe http https://api.github.com
+  Remediation Usually open even on restricted networks; if blocked, use the GitHub MCP server instead (it routes through Anthropic and bypasses the VM allowlist).
+  Risk low
+  Environments local cloud ci

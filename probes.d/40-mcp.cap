@@ -1,0 +1,22 @@
+# MCP servers are the keystone signal: their traffic routes through Anthropic's
+# servers, so they bypass any VM network allowlist. A session that cannot fetch
+# a live website may still create repos and deploy through MCP.
+# The detector reports CONFIGURED only (parsed from .mcp.json / ~/.claude.json).
+# It never claims authentication; the whereami skill verifies auth on demand
+# with read-only calls and updates state.json.
+
+Capability mcp.github
+  Description GitHub MCP server configured (create repos, PRs, API without direct network)
+  Probe mcp github
+  Requires OAuth session on the Anthropic side
+  Remediation Add the GitHub MCP server (claude mcp add, or a connector on claude.ai) and authenticate it once from an interactive session.
+  Risk low
+  Environments local cloud
+
+Capability mcp.vercel
+  Description Vercel MCP server configured (deploys without direct network)
+  Probe mcp vercel
+  Requires OAuth session on the Anthropic side
+  Remediation Add the Vercel MCP server / connector and authenticate it once from an interactive session.
+  Risk low
+  Environments local cloud

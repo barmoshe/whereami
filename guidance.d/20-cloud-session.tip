@@ -1,0 +1,3 @@
+Tip cloud-session-shape
+  When runtime=cloud
+  Say This is an ephemeral cloud VM: single repo checkout, no sibling repos, no secrets store. Prefer the MCP lane for actions (repos, deploys), commit early and often, and when a capability is missing, emit a clean handoff brief plus assets instead of half-building.

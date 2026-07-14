@@ -1,0 +1,51 @@
+# Core toolchain presence. Add project-specific tools via "extra_tools" in
+# whereami.config.json or drop your own .cap in <project>/.whereami/probes.d/.
+
+Capability vcs.git
+  Description Local git operations
+  Probe cmd git
+  Remediation Install git, or drive GitHub through the GitHub MCP server / gh api from a capable environment.
+  Risk low
+  Environments local cloud ci
+
+Capability vcs.gh
+  Description GitHub CLI (repos, PRs, API)
+  Probe cmd gh
+  Remediation Install the gh CLI and run gh auth login, or use the GitHub MCP server.
+  Risk low
+  Environments local ci
+
+Capability runtime.node
+  Description Node.js runtime for JS/TS builds
+  Probe cmd node
+  Remediation Install Node.js (Claude Code ships as a native binary, so node is not guaranteed on the host).
+  Risk low
+  Environments local cloud ci
+
+Capability runtime.python
+  Description Python runtime
+  Probe cmd python3 python
+  Remediation Install Python 3.
+  Risk low
+  Environments local cloud ci
+
+Capability media.ffmpeg
+  Description Audio/video encode, transcode, render
+  Probe cmd ffmpeg
+  Remediation Install ffmpeg, or hand off media rendering to an environment that has it.
+  Risk low
+  Environments local
+
+Capability docs.pdf-tools
+  Description PDF rasterize/inspect (poppler)
+  Probe cmd pdftoppm pdftotext
+  Remediation Install poppler-utils, or ask the operator to upload rendered page images.
+  Risk low
+  Environments local
+
+Capability infra.docker
+  Description Container builds and runs
+  Probe cmd docker podman
+  Remediation Install Docker or Podman, or delegate container work to CI.
+  Risk low
+  Environments local ci
