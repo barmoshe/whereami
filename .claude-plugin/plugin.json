@@ -1,7 +1,7 @@
 {
   "name": "whereami",
   "displayName": "whereami",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Environment-aware Claude Code sessions: at session start, sense where the session runs (local, cloud, CI, sandbox) and what it can actually do (network lane, tools, MCP servers, browser, filesystem), brief Claude, and save the facts as JSON for other tooling. A neutral sensor first, with an opt-in guidance layer.",
   "author": { "name": "Bar Moshe" },
   "license": "MIT",

@@ -1,41 +1,50 @@
 # Creating a NEW GitHub repo: the capability that taught us the most.
 #
-# It fails in a Claude Code cloud session for TWO independent reasons, and fixing
-# either one alone changes nothing. This descriptor exists to stop an agent
-# rediscovering that by hitting a 403.
+# In a Claude Code cloud session this fails for TWO independent, stacking reasons.
+# Fixing either one alone changes nothing, which is why it took three attempts to
+# describe correctly. This descriptor exists so an agent stops rediscovering it.
 #
 #   1. CREDENTIAL TYPE. The built-in GitHub tools authenticate as the Claude
-#      GitHub App, and a GitHub App installation token cannot create a user-owned
-#      repo: POST /user/repos takes a user OAuth token or a PAT. -> 403
-#      "Resource not accessible by integration".
+#      GitHub App. An App installation token cannot create a user-owned repo:
+#      POST /user/repos takes a user OAuth token or a PAT. -> 403 "Resource not
+#      accessible by integration".
 #
-#   2. EGRESS POLICY (the wall behind the wall). Even holding a valid user PAT,
-#      the cloud session's agent proxy re-terminates TLS and filters GitHub API
-#      *paths*, allowing only endpoints scoped to the session's configured repo.
-#      POST /user/repos is not repo-scoped, so the proxy refuses it before it ever
-#      reaches GitHub: "sessions are bound to their configured repositories."
+#   2. EGRESS POLICY (the wall behind the wall). The session's agent proxy
+#      re-terminates TLS and enforces an AUTHORIZED REPOSITORY SET: the repos
+#      configured as that session's sources. It refuses GitHub API paths outside
+#      that set, and it refuses to inject a credential for them. This holds EVEN
+#      IF YOU SUPPLY YOUR OWN VALID PAT: the proxy intercepts the call before
+#      GitHub can validate it. Adding GH_TOKEN to the cloud environment does NOT
+#      work. Neither does creating the repo in the web UI and pushing into it,
+#      because that repo is still outside the authorized set.
 #
-# So "reachable" is true (api.github.com answers 200), the credential is right,
-# and the call still cannot be made. Host-level reachability does not imply
-# path-level reachability. Hence the Unless veto: in a cloud session this is
-# unavailable no matter what token is present. Verified empirically, 2026-07-14.
+# So api.github.com answers 200, the credential is correct, and the call remains
+# impossible. Host-level reachability does not imply path-level reachability.
+#
+# THE ESCAPE that does exist: MCP connector traffic is routed through Anthropic's
+# servers, NOT through the VM's egress proxy. A user-authenticated GitHub MCP
+# connector (github's official remote server, OAuth scope repo) therefore sidesteps
+# both walls at once: a user credential, on a channel the proxy never sees. This is
+# the same channel that lets the Vercel MCP deploy from a fully locked-down VM.
+#
+# Verified empirically 2026-07-14 + anthropics/claude-code#76248.
 
 Capability github.repo-create
-  Description Create a NEW GitHub repository (needs a user credential AND an unfiltered egress path)
+  Description Create a NEW GitHub repository (needs a user credential AND a path the egress proxy does not filter)
   Probe env GH_TOKEN
   Probe env GITHUB_TOKEN
   Probe file ~/.config/gh/hosts.yml
   Unless env CLAUDE_CODE_REMOTE
-  Blocked Cloud session: the agent proxy filters GitHub API paths to this session's bound repo, so POST /user/repos is refused even with a valid PAT. A token does NOT fix this. Create the repo from a local session, or under an org, or make it in the GitHub UI and push into it from here (writes to an EXISTING repo are allowed).
-  Requires A user credential (PAT or user OAuth; an App installation token is never enough for user-owned repos) AND an environment whose egress is not path-filtered.
-  Remediation Create it from a LOCAL session (simplest, and what works today). Or create an org repo: POST /orgs/{org}/repos does work for the Claude GitHub App with Administration permission. Or create the empty repo in the github.com UI, then push into it from anywhere, since existing-repo writes pass the proxy. Adding a PAT as GH_TOKEN in cloud environment settings is NOT sufficient on its own and was verified to still 403 at the proxy.
+  Blocked Cloud session: the agent proxy enforces an authorized repository set and refuses GitHub API calls outside it, even with your own valid PAT. A token in the environment does NOT fix this, and neither does pre-creating the repo in the UI (pushing to it is blocked too). Create it from a local session, or go through a user-authenticated GitHub MCP connector, whose traffic routes via Anthropic and never touches this proxy.
+  Requires A user credential (PAT or user OAuth; an App installation token is never enough for user-owned repos) AND an egress path that is not filtered to an authorized repo set.
+  Remediation Best from cloud: add github's official remote MCP server (https://api.githubcopilot.com/mcp/) as a custom connector authenticated by OAuth with the repo scope, and call its create_repository. Connector traffic routes through Anthropic and bypasses the VM proxy entirely. Otherwise: create the repo from a LOCAL session (simplest, works today), or delegate to GitHub Actions (a workflow holding a PAT in Actions secrets runs on GitHub infrastructure, where no proxy applies). Do NOT put a PAT in the cloud environment: it is blocked by the proxy and there is no secrets store.
   Risk high
   Environments local
 
 Capability github.repo-write
-  Description Read and write EXISTING repos (issues, PRs, comments, pushes) via the built-in GitHub tools
+  Description Read and write repos that are in THIS session's authorized set (issues, PRs, comments, pushes)
   Probe http https://api.github.com
-  Requires The Claude GitHub App connection, or a gh token synced with /web-setup
-  Remediation Works on the default Trusted network level, and repo-scoped API paths pass the cloud agent proxy. This is a different credential and policy class from creating a new repo: acting on the repo you are bound to is fine, minting a new one is not.
+  Requires The Claude GitHub App connection or a synced gh token, AND the target repo must be one of this session's configured sources.
+  Remediation Works on the default Trusted network level for the repos this session was opened against. For a repo OUTSIDE that set, the proxy refuses the write and will not inject a credential, no matter which token you hold: open a session whose sources include that repo, or act on it from a local session. Acting on the repo you are bound to is fine; reaching a different one is not.
   Risk low
   Environments local cloud ci
