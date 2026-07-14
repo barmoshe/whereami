@@ -1,0 +1,3 @@
+Tip cloud-repo-create-wall
+  When runtime=cloud
+  Say Creating a NEW user-owned GitHub repo from here will 403 unless GH_TOKEN is set. The built-in GitHub tools authenticate as the Claude GitHub App, and an App installation token cannot create personal repos at any network level. Check github.repo-create above: if it is unavailable, either set GH_TOKEN (a PAT) in the environment settings, or hand the repo creation to a local session. Deploying is unaffected, the Vercel MCP ships a file tree directly and needs no repo.

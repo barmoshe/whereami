@@ -1,0 +1,30 @@
+# The permission wall, made visible.
+#
+# Reaching GitHub is not the same as being ALLOWED to act on it. In a Claude Code
+# cloud session the built-in GitHub tools authenticate as the Claude GitHub App,
+# and a GitHub App installation token CANNOT create a user-owned repository:
+# POST /user/repos accepts only a user OAuth token or a PAT. It returns
+# 403 "Resource not accessible by integration" on a full, healthy network.
+#
+# So we probe for the CREDENTIAL TYPE, not for reachability. A GH_TOKEN in the
+# environment is a user token, and it is what turns repo creation from impossible
+# into routine. This is the one descriptor whose probe answers "am I allowed",
+# and it is the seed of the Remediate layer.
+
+Capability github.repo-create
+  Description Create a NEW GitHub repository (needs a user-type credential, not an App token)
+  Probe env GH_TOKEN
+  Probe env GITHUB_TOKEN
+  Probe file ~/.config/gh/hosts.yml
+  Requires A user credential (PAT or user OAuth). A GitHub App installation token is NOT sufficient for user-owned repos, at any network level.
+  Remediation Set GH_TOKEN to a GitHub PAT. Fine-grained: Administration read/write (repo creation), short expiry. Classic: repo scope (or public_repo for public only). In Claude Code cloud, add it under environment settings; note there is no secrets store yet, so it is visible to anyone who can edit that environment. Prefer a short expiry and rotate. Without it, create the repo from a local session, or under an org (POST /orgs/{org}/repos works for an App with Administration permission).
+  Risk high
+  Environments local
+
+Capability github.api-write-as-app
+  Description Act on EXISTING repos via the built-in GitHub tools (issues, PRs, comments, pushes)
+  Probe http https://api.github.com
+  Requires The Claude GitHub App connection, or a gh token synced with /web-setup
+  Remediation Reachable on the default Trusted network level (GitHub is allowlisted). This covers reading and writing EXISTING repos. It does not cover creating new user-owned ones, which is a different credential class entirely.
+  Risk low
+  Environments local cloud ci
