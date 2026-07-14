@@ -19,7 +19,7 @@
 set +e
 trap 'exit 0' INT TERM
 
-VERSION="0.5.0"
+VERSION="0.5.1"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
@@ -477,7 +477,16 @@ printf '%s\n' "$STATE_JSON" > "$STATE_FILE" 2>/dev/null
 
 # --- render brief ------------------------------------------------------------------
 render_brief() {
-  printf '[whereami] runtime=%s os=%s network=%s sandboxed=%s\n' "$RUNTIME" "$OS" "$NETWORK" "$SANDBOXED"
+  # entrypoint is surfaced because "runtime" alone is too coarse: two sessions
+  # can both be runtime=cloud and still have different capabilities. A Claude Code
+  # web INTERACTIVE session gets only the first-party GitHub MCP, while a ROUTINE
+  # on the same account retains its connectors. Same runtime, different powers.
+  if [ -n "$ENTRYPOINT" ]; then
+    printf '[whereami] runtime=%s entrypoint=%s os=%s network=%s sandboxed=%s\n' \
+      "$RUNTIME" "$ENTRYPOINT" "$OS" "$NETWORK" "$SANDBOXED"
+  else
+    printf '[whereami] runtime=%s os=%s network=%s sandboxed=%s\n' "$RUNTIME" "$OS" "$NETWORK" "$SANDBOXED"
+  fi
   if [ -n "$MCP_CONFIGURED" ]; then
     printf 'MCP servers in config (auth unverified; MCP routes via Anthropic and bypasses any VM network allowlist): %s\n' \
       "$(printf '%s' "$MCP_CONFIGURED" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
