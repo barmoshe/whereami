@@ -19,7 +19,7 @@
 set +e
 trap 'exit 0' INT TERM
 
-VERSION="0.5.1"
+VERSION="0.6.0"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 PLUGIN_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$(pwd)}"
